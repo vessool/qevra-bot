@@ -74,7 +74,7 @@ def webhook():
             [
                 {
                     "text": "📢 Наш канал",
-                    "url": "https://t.me/ТУТ_USERNAME_КАНАЛА"
+                    "url": "https://t.me/bonusgrew"
                 }
             ]
         ]
