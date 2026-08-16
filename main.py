@@ -13,9 +13,9 @@ from io import BytesIO
 app = Flask(__name__)
 
 
-# =========================
+# =========================================================
 # НАСТРОЙКИ
-# =========================
+# =========================================================
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
@@ -23,10 +23,13 @@ CHANNEL_USERNAME = "@bonusgrew"
 
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
+# Последний распознанный текст каждого пользователя
+user_texts = {}
 
-# =========================
+
+# =========================================================
 # TELEGRAM API
-# =========================
+# =========================================================
 
 def telegram(method, data=None):
 
@@ -61,9 +64,9 @@ def telegram(method, data=None):
         }
 
 
-# =========================
+# =========================================================
 # ОТПРАВКА СООБЩЕНИЯ
-# =========================
+# =========================================================
 
 def send_message(chat_id, text, keyboard=None):
 
@@ -79,25 +82,48 @@ def send_message(chat_id, text, keyboard=None):
             ensure_ascii=False
         )
 
-    response = requests.post(
-        f"{API}/sendMessage",
-        data=data,
-        timeout=30
+    return telegram(
+        "sendMessage",
+        data
     )
 
-    print(
-        "Telegram: sendMessage",
-        response.status_code,
-        response.text,
-        flush=True
-    )
 
-    return response.json()
+# =========================================================
+# РАЗБИВКА ДЛИННОГО ТЕКСТА
+# =========================================================
+
+def send_long_message(chat_id, text):
+
+    max_length = 4000
+
+    if len(text) <= max_length:
+
+        send_message(
+            chat_id,
+            text
+        )
+
+        return
+
+    for i in range(
+        0,
+        len(text),
+        max_length
+    ):
+
+        part = text[
+            i:i + max_length
+        ]
+
+        send_message(
+            chat_id,
+            part
+        )
 
 
-# =========================
+# =========================================================
 # ПРОВЕРКА ПОДПИСКИ
-# =========================
+# =========================================================
 
 def check_subscription(user_id):
 
@@ -140,9 +166,9 @@ def check_subscription(user_id):
     ]
 
 
-# =========================
+# =========================================================
 # СКАЧИВАНИЕ ФОТО
-# =========================
+# =========================================================
 
 def download_telegram_photo(file_id):
 
@@ -182,27 +208,39 @@ def download_telegram_photo(file_id):
         flush=True
     )
 
-    response = requests.get(
-        file_url,
-        timeout=60
-    )
+    try:
 
-    if response.status_code != 200:
+        response = requests.get(
+            file_url,
+            timeout=60
+        )
+
+        if response.status_code != 200:
+
+            print(
+                "Ошибка скачивания:",
+                response.status_code,
+                flush=True
+            )
+
+            return None
+
+        return response.content
+
+    except Exception as error:
 
         print(
-            "Ошибка скачивания:",
-            response.status_code,
+            "DOWNLOAD ERROR:",
+            error,
             flush=True
         )
 
         return None
 
-    return response.content
 
-
-# =========================
+# =========================================================
 # OCR
-# =========================
+# =========================================================
 
 def recognize_text(image_bytes):
 
@@ -222,6 +260,7 @@ def recognize_text(image_bytes):
 
         width, height = image.size
 
+        # Увеличиваем маленькие изображения
         if width < 1600:
 
             scale = 1600 / width
@@ -233,12 +272,15 @@ def recognize_text(image_bytes):
                 )
             )
 
+        # Чёрно-белое изображение
         image = image.convert("L")
 
+        # Контраст
         image = ImageEnhance.Contrast(
             image
         ).enhance(2.0)
 
+        # Резкость
         image = image.filter(
             ImageFilter.SHARPEN
         )
@@ -267,9 +309,203 @@ def recognize_text(image_bytes):
         return None
 
 
-# =========================
+# =========================================================
+# ПЕРЕВОД
+# =========================================================
+
+def translate_text(text):
+
+    print(
+        "Запускаем перевод...",
+        flush=True
+    )
+
+    try:
+
+        # Определяем язык очень приблизительно
+        russian_letters = sum(
+            1 for char in text
+            if "а" <= char.lower() <= "я"
+        )
+
+        english_letters = sum(
+            1 for char in text
+            if "a" <= char.lower() <= "z"
+        )
+
+        if russian_letters > english_letters:
+
+            source_lang = "ru"
+            target_lang = "en"
+
+        else:
+
+            source_lang = "en"
+            target_lang = "ru"
+
+        url = "https://translate.googleapis.com/translate_a/single"
+
+        params = {
+            "client": "gtx",
+            "sl": source_lang,
+            "tl": target_lang,
+            "dt": "t",
+            "q": text
+        }
+
+        response = requests.get(
+            url,
+            params=params,
+            timeout=30
+        )
+
+        if response.status_code != 200:
+
+            print(
+                "TRANSLATE STATUS:",
+                response.status_code,
+                flush=True
+            )
+
+            return None
+
+        data = response.json()
+
+        translated_parts = []
+
+        for item in data[0]:
+
+            if item and item[0]:
+
+                translated_parts.append(
+                    item[0]
+                )
+
+        translated = "".join(
+            translated_parts
+        ).strip()
+
+        if not translated:
+
+            return None
+
+        print(
+            "Перевод получен:",
+            translated[:200],
+            flush=True
+        )
+
+        return translated
+
+    except Exception as error:
+
+        print(
+            "TRANSLATE ERROR:",
+            error,
+            flush=True
+        )
+
+        return None
+
+
+# =========================================================
+# УЛУЧШЕНИЕ ТЕКСТА
+# =========================================================
+
+def improve_text(text):
+
+    try:
+
+        # Убираем лишние пробелы
+        lines = []
+
+        for line in text.splitlines():
+
+            line = " ".join(
+                line.split()
+            ).strip()
+
+            if line:
+
+                lines.append(line)
+
+        cleaned = "\n".join(lines)
+
+        # Убираем повторяющиеся пробелы
+        cleaned = cleaned.replace(
+            "  ",
+            " "
+        )
+
+        # Исправляем некоторые типичные OCR-ошибки
+        replacements = {
+
+            " ,": ",",
+            " .": ".",
+            " !": "!",
+            " ?": "?",
+            " :": ":",
+            " ;": ";",
+            "( ": "(",
+            " )": ")"
+
+        }
+
+        for old, new in replacements.items():
+
+            cleaned = cleaned.replace(
+                old,
+                new
+            )
+
+        return cleaned.strip()
+
+    except Exception as error:
+
+        print(
+            "IMPROVE ERROR:",
+            error,
+            flush=True
+        )
+
+        return text
+
+
+# =========================================================
+# ГЛАВНОЕ МЕНЮ
+# =========================================================
+
+def main_menu_keyboard():
+
+    return {
+        "inline_keyboard": [
+
+            [
+                {
+                    "text": "📸 Распознать текст",
+                    "callback_data": "ocr"
+                }
+            ]
+
+        ]
+    }
+
+
+def show_menu(chat_id):
+
+    send_message(
+        chat_id,
+
+        "🎉 QEVRA готов к работе!\n\n"
+        "Выбери функцию:",
+
+        main_menu_keyboard()
+    )
+
+
+# =========================================================
 # START
-# =========================
+# =========================================================
 
 def start_command(chat_id):
 
@@ -297,11 +533,17 @@ def start_command(chat_id):
         chat_id,
 
         "👋 Привет! Я QEVRA 🚀\n\n"
-        "Здесь будут полезные инструменты "
-        "прямо в Telegram.\n\n"
-        "Для получения доступа сначала "
-        "подпишись на наш канал:\n"
+
+        "Твой Telegram-помощник.\n\n"
+
+        "Сейчас я умею:\n"
+        "📸 распознавать текст с фотографий\n"
+        "🌐 переводить распознанный текст\n"
+        "✍️ очищать и улучшать текст\n\n"
+
+        "Для доступа подпишись на канал:\n"
         "@bonusgrew\n\n"
+
         "После подписки нажми "
         "«✅ Проверить подписку».",
 
@@ -309,39 +551,9 @@ def start_command(chat_id):
     )
 
 
-# =========================
-# МЕНЮ ПОСЛЕ ПОДПИСКИ
-# =========================
-
-def show_menu(chat_id):
-
-    keyboard = {
-        "inline_keyboard": [
-
-            [
-                {
-                    "text": "📸 Распознать текст с фото",
-                    "callback_data": "ocr"
-                }
-            ]
-
-        ]
-    }
-
-    send_message(
-        chat_id,
-
-        "🎉 Отлично!\n\n"
-        "Подписка подтверждена.\n\n"
-        "Выбери функцию:",
-
-        keyboard
-    )
-
-
-# =========================
-# МЕНЮ ПОСЛЕ OCR
-# =========================
+# =========================================================
+# МЕНЮ РЕЗУЛЬТАТА OCR
+# =========================================================
 
 def ocr_result_keyboard():
 
@@ -367,15 +579,22 @@ def ocr_result_keyboard():
                     "text": "📸 Распознать ещё",
                     "callback_data": "ocr"
                 }
+            ],
+
+            [
+                {
+                    "text": "🏠 Главное меню",
+                    "callback_data": "menu"
+                }
             ]
 
         ]
     }
 
 
-# =========================
+# =========================================================
 # ОБРАБОТКА ФОТО
-# =========================
+# =========================================================
 
 def process_photo(
     chat_id,
@@ -388,6 +607,7 @@ def process_photo(
         flush=True
     )
 
+    # Проверяем подписку
     if not check_subscription(user_id):
 
         send_message(
@@ -408,6 +628,7 @@ def process_photo(
 
         photos = message["photo"]
 
+        # Берём самое большое фото
         largest_photo = photos[-1]
 
         file_id = largest_photo["file_id"]
@@ -434,55 +655,34 @@ def process_photo(
             send_message(
                 chat_id,
 
-                "😔 Я не смог найти текст на этой фотографии.\n\n"
-                "Попробуй отправить более чёткое фото "
-                "с хорошим освещением."
+                "😔 Я не смог найти текст "
+                "на этой фотографии.\n\n"
+
+                "Попробуй:\n"
+                "• сделать фото чётче\n"
+                "• добавить освещение\n"
+                "• сфотографировать текст прямо"
             )
 
             return
 
-        max_length = 4000
+        # Сохраняем текст
+        user_texts[user_id] = text
 
-        if len(text) <= max_length:
+        print(
+            "Текст сохранён для пользователя:",
+            user_id,
+            flush=True
+        )
 
-            send_message(
-                chat_id,
+        send_message(
+            chat_id,
 
-                "📝 Распознанный текст:\n\n"
-                + text,
+            "📝 Распознанный текст:\n\n"
+            + text,
 
-                ocr_result_keyboard()
-            )
-
-        else:
-
-            send_message(
-                chat_id,
-
-                "📝 Распознанный текст:\n\n"
-                + text[:max_length]
-            )
-
-            for i in range(
-                max_length,
-                len(text),
-                max_length
-            ):
-
-                part = text[
-                    i:i + max_length
-                ]
-
-                send_message(
-                    chat_id,
-                    part
-                )
-
-            send_message(
-                chat_id,
-                "Что сделать дальше?",
-                ocr_result_keyboard()
-            )
+            ocr_result_keyboard()
+        )
 
     except Exception as error:
 
@@ -495,13 +695,14 @@ def process_photo(
         send_message(
             chat_id,
 
-            "❌ Произошла ошибка при обработке фотографии."
+            "❌ Произошла ошибка "
+            "при обработке фотографии."
         )
 
 
-# =========================
+# =========================================================
 # WEBHOOK
-# =========================
+# =========================================================
 
 @app.route(
     "/webhook",
@@ -529,9 +730,9 @@ def webhook():
         return "OK"
 
 
-    # =========================
+    # =====================================================
     # СООБЩЕНИЯ
-    # =========================
+    # =====================================================
 
     if "message" in update:
 
@@ -570,9 +771,9 @@ def webhook():
         )
 
 
-        # =========================
+        # -------------------------------------------------
         # START
-        # =========================
+        # -------------------------------------------------
 
         if text == "/start":
 
@@ -586,9 +787,9 @@ def webhook():
             )
 
 
-        # =========================
+        # -------------------------------------------------
         # ФОТО
-        # =========================
+        # -------------------------------------------------
 
         elif "photo" in message:
 
@@ -604,9 +805,9 @@ def webhook():
             )
 
 
-    # =========================
+    # =====================================================
     # CALLBACK
-    # =========================
+    # =====================================================
 
     if "callback_query" in update:
 
@@ -632,9 +833,9 @@ def webhook():
         )
 
 
-        # =========================
+        # =================================================
         # ПРОВЕРКА ПОДПИСКИ
-        # =========================
+        # =================================================
 
         if callback_data == "check_subscription":
 
@@ -670,14 +871,15 @@ def webhook():
                     chat_id,
 
                     "❌ Я пока не вижу твою подписку.\n\n"
+
                     "Подпишись на @bonusgrew "
                     "и нажми кнопку проверки ещё раз."
                 )
 
 
-        # =========================
-        # КНОПКА OCR
-        # =========================
+        # =================================================
+        # OCR
+        # =================================================
 
         elif callback_data == "ocr":
 
@@ -691,14 +893,14 @@ def webhook():
             send_message(
                 chat_id,
 
-                "📸 Отправь мне фотографию с текстом.\n\n"
-                "Я попробую распознать текст."
+                "📸 Отправь фотографию с текстом.\n\n"
+                "Я попробую распознать его."
             )
 
 
-        # =========================
+        # =================================================
         # ПЕРЕВОД
-        # =========================
+        # =================================================
 
         elif callback_data == "translate":
 
@@ -706,23 +908,70 @@ def webhook():
                 "answerCallbackQuery",
                 {
                     "callback_query_id": callback_id,
-                    "text": "🌐 Функция перевода готовится"
+                    "text": "🌐 Перевожу..."
                 }
             )
 
-            send_message(
-                chat_id,
+            # Проверяем подписку
+            if not check_subscription(user_id):
 
-                "🌐 Перевод\n\n"
-                "Эта функция пока находится в разработке.\n\n"
-                "Скоро QEVRA сможет переводить "
-                "распознанный текст."
-            )
+                send_message(
+                    chat_id,
+                    "❌ Сначала подпишись на @bonusgrew."
+                )
+
+            elif user_id not in user_texts:
+
+                send_message(
+                    chat_id,
+
+                    "❌ У меня нет текста для перевода.\n\n"
+                    "Сначала отправь фотографию."
+                )
+
+            else:
+
+                original_text = user_texts[user_id]
+
+                send_message(
+                    chat_id,
+                    "🌐 Перевожу текст..."
+                )
+
+                translated = translate_text(
+                    original_text
+                )
+
+                if translated:
+
+                    send_long_message(
+                        chat_id,
+
+                        "🌐 Перевод:\n\n"
+                        + translated
+                    )
+
+                    send_message(
+                        chat_id,
+
+                        "Что сделать дальше?",
+
+                        ocr_result_keyboard()
+                    )
+
+                else:
+
+                    send_message(
+                        chat_id,
+
+                        "❌ Не удалось выполнить перевод.\n\n"
+                        "Попробуй ещё раз."
+                    )
 
 
-        # =========================
-        # УЛУЧШЕНИЕ ТЕКСТА
-        # =========================
+        # =================================================
+        # УЛУЧШЕНИЕ
+        # =================================================
 
         elif callback_data == "improve":
 
@@ -730,26 +979,85 @@ def webhook():
                 "answerCallbackQuery",
                 {
                     "callback_query_id": callback_id,
-                    "text": "✍️ Функция готовится"
+                    "text": "✍️ Обрабатываю..."
                 }
             )
 
-            send_message(
-                chat_id,
+            if not check_subscription(user_id):
 
-                "✍️ Улучшение текста\n\n"
-                "Эта функция пока находится в разработке.\n\n"
-                "Скоро QEVRA сможет исправлять "
-                "ошибки и форматировать текст."
+                send_message(
+                    chat_id,
+                    "❌ Сначала подпишись на @bonusgrew."
+                )
+
+            elif user_id not in user_texts:
+
+                send_message(
+                    chat_id,
+
+                    "❌ У меня нет текста.\n\n"
+                    "Сначала отправь фотографию."
+                )
+
+            else:
+
+                original_text = user_texts[user_id]
+
+                improved = improve_text(
+                    original_text
+                )
+
+                user_texts[user_id] = improved
+
+                send_long_message(
+                    chat_id,
+
+                    "✍️ Улучшенный текст:\n\n"
+                    + improved
+                )
+
+                send_message(
+                    chat_id,
+
+                    "Что сделать дальше?",
+
+                    ocr_result_keyboard()
+                )
+
+
+        # =================================================
+        # ГЛАВНОЕ МЕНЮ
+        # =================================================
+
+        elif callback_data == "menu":
+
+            telegram(
+                "answerCallbackQuery",
+                {
+                    "callback_query_id": callback_id
+                }
             )
+
+            if not check_subscription(user_id):
+
+                send_message(
+                    chat_id,
+                    "❌ Сначала подпишись на @bonusgrew."
+                )
+
+            else:
+
+                show_menu(
+                    chat_id
+                )
 
 
     return "OK"
 
 
-# =========================
-# ГЛАВНАЯ
-# =========================
+# =========================================================
+# ГЛАВНАЯ СТРАНИЦА
+# =========================================================
 
 @app.route(
     "/",
@@ -760,9 +1068,9 @@ def home():
     return "QEVRA is alive! 🚀"
 
 
-# =========================
+# =========================================================
 # ЗАПУСК
-# =========================
+# =========================================================
 
 if __name__ == "__main__":
 
