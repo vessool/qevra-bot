@@ -9,7 +9,26 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 
-def send_message(chat_id, text):
+def send_message(chat_id, text, keyboard=None):
+
+    data = {
+        "chat_id": chat_id,
+        "text": text
+    }
+
+    if keyboard:
+        data["reply_markup"] = keyboard
+
+    response = requests.post(
+        f"{API}/sendMessage",
+        data=data,
+        timeout=30
+    )
+
+    print(response.status_code)
+    print(response.text)
+
+    return response.json()
 
     response = requests.post(
         f"{API}/sendMessage",
@@ -50,11 +69,26 @@ def webhook():
 
         if text == "/start":
 
-            send_message(
-                chat_id,
-                "👋 Привет! Я QEVRA.\n\n"
-                "Бот работает! 🚀"
-            )
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "📢 Наш канал",
+                    "url": "https://t.me/ТУТ_USERNAME_КАНАЛА"
+                }
+            ]
+        ]
+    }
+
+    send_message(
+        chat_id,
+
+        "👋 Привет! Я QEVRA.\n\n"
+        "Бот работает! 🚀\n\n"
+        "Здесь скоро появятся полезные инструменты.",
+
+        keyboard
+    )
 
     return "OK"
 
