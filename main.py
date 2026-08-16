@@ -121,6 +121,11 @@ def start_command(chat_id):
 @app.route("/webhook", methods=["POST"])
 def webhook():
 
+    print("!!! QEVRA WEBHOOK STARTED !!!", flush=True)
+
+    update = request.get_json()
+
+    print("UPDATE:", update, flush=True)
     print("")
     print("========================")
     print("🔥 WEBHOOK RECEIVED")
