@@ -30,20 +30,6 @@ def send_message(chat_id, text, keyboard=None):
 
     return response.json()
 
-    response = requests.post(
-        f"{API}/sendMessage",
-        data={
-            "chat_id": chat_id,
-            "text": text
-        },
-        timeout=30
-    )
-
-    print(response.status_code)
-    print(response.text)
-
-    return response.json()
-
 
 @app.route("/", methods=["GET"])
 def home():
@@ -69,26 +55,24 @@ def webhook():
 
         if text == "/start":
 
-    keyboard = {
-        "inline_keyboard": [
-            [
-                {
-                    "text": "📢 Наш канал",
-                    "url": "https://t.me/bonusgrew"
-                }
-            ]
-        ]
-    }
+            keyboard = {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "📢 Наш канал",
+                            "url": "https://t.me/bonusgrew"
+                        }
+                    ]
+                ]
+            }
 
-    send_message(
-        chat_id,
-
-        "👋 Привет! Я QEVRA.\n\n"
-        "Бот работает! 🚀\n\n"
-        "Здесь скоро появятся полезные инструменты.",
-
-        keyboard
-    )
+            send_message(
+                chat_id,
+                "👋 Привет! Я QEVRA.\n\n"
+                "Бот работает! 🚀\n\n"
+                "Здесь скоро появятся полезные инструменты.",
+                keyboard
+            )
 
     return "OK"
 
