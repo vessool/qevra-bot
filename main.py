@@ -141,6 +141,29 @@ def webhook():
 
     if "message" in update:
 
+        print("MESSAGE FOUND", flush=True)
+
+        message = update["message"]
+
+        chat_id = message["chat"]["id"]
+
+        text = message.get("text", "")
+
+        print("CHAT ID:", chat_id, flush=True)
+        print("TEXT:", text, flush=True)
+
+        if text == "/start":
+
+            print("START DETECTED", flush=True)
+
+            send_message(
+                chat_id,
+                "👋 Привет! Я QEVRA 🚀\n\n"
+                "Бот снова работает!"
+            )
+
+            print("MESSAGE SENT", flush=True)
+
         message = update["message"]
 
         chat_id = message["chat"]["id"]
