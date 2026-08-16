@@ -4,12 +4,20 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
+# =========================
+# НАСТРОЙКИ
+# =========================
+
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 CHANNEL_USERNAME = "@bonusgrew"
 
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
+
+# =========================
+# TELEGRAM API
+# =========================
 
 def telegram(method, data=None):
 
@@ -21,20 +29,32 @@ def telegram(method, data=None):
             timeout=30
         )
 
-        print("Telegram status:", response.status_code)
-        print("Telegram response:", response.text)
+        print(
+            "Telegram:",
+            method,
+            response.status_code,
+            response.text,
+            flush=True
+        )
 
         return response.json()
 
     except Exception as error:
 
-        print("Telegram error:", error)
+        print(
+            "Telegram ERROR:",
+            error,
+            flush=True
+        )
 
         return {
-            "ok": False,
-            "error": str(error)
+            "ok": False
         }
 
+
+# =========================
+# ОТПРАВКА СООБЩЕНИЯ
+# =========================
 
 def send_message(chat_id, text, keyboard=None):
 
@@ -43,7 +63,8 @@ def send_message(chat_id, text, keyboard=None):
         "text": text
     }
 
-    if keyboard is not None:
+    if keyboard:
+
         data["reply_markup"] = keyboard
 
     return telegram(
@@ -52,7 +73,17 @@ def send_message(chat_id, text, keyboard=None):
     )
 
 
+# =========================
+# ПРОВЕРКА ПОДПИСКИ
+# =========================
+
 def check_subscription(user_id):
+
+    print(
+        "Проверяем подписку:",
+        user_id,
+        flush=True
+    )
 
     result = telegram(
         "getChatMember",
@@ -64,13 +95,21 @@ def check_subscription(user_id):
 
     if not result.get("ok"):
 
-        print("Ошибка проверки подписки")
+        print(
+            "Не удалось проверить подписку:",
+            result,
+            flush=True
+        )
 
         return False
 
     status = result["result"]["status"]
 
-    print("Статус пользователя:", status)
+    print(
+        "Статус пользователя:",
+        status,
+        flush=True
+    )
 
     return status in [
         "member",
@@ -78,6 +117,10 @@ def check_subscription(user_id):
         "creator"
     ]
 
+
+# =========================
+# START
+# =========================
 
 def start_command(chat_id):
 
@@ -104,13 +147,15 @@ def start_command(chat_id):
     send_message(
         chat_id,
 
-        "👋 Привет!\n\n"
-        "Я — QEVRA.\n\n"
-        "🤖 Полезные инструменты прямо "
-        "в Telegram.\n\n"
-        "Для получения бесплатного доступа "
-        "подпишись на наш канал "
-        "@bonusgrew.\n\n"
+        "👋 Привет! Я QEVRA 🚀\n\n"
+
+        "Здесь будут полезные инструменты "
+        "прямо в Telegram.\n\n"
+
+        "Для получения доступа сначала "
+        "подпишись на наш канал:\n"
+        "@bonusgrew\n\n"
+
         "После подписки нажми "
         "«✅ Проверить подписку».",
 
@@ -118,51 +163,46 @@ def start_command(chat_id):
     )
 
 
-@app.route("/webhook", methods=["POST"])
+# =========================
+# WEBHOOK
+# =========================
+
+@app.route(
+    "/webhook",
+    methods=["POST"]
+)
 def webhook():
 
-    print("!!! QEVRA WEBHOOK STARTED !!!", flush=True)
+    print(
+        "!!! QEVRA WEBHOOK STARTED !!!",
+        flush=True
+    )
 
-    update = request.get_json()
+    update = request.get_json(
+        silent=True
+    )
 
-    print("UPDATE:", update, flush=True)
-    print("")
-    print("========================")
-    print("🔥 WEBHOOK RECEIVED")
-    print("========================")
-
-    update = request.get_json(silent=True)
-
-    print("UPDATE:")
-    print(update)
+    print(
+        "UPDATE:",
+        update,
+        flush=True
+    )
 
     if not update:
+
         return "OK"
+
+
+    # =========================
+    # СООБЩЕНИЯ
+    # =========================
 
     if "message" in update:
 
-        print("MESSAGE FOUND", flush=True)
-
-        message = update["message"]
-
-        chat_id = message["chat"]["id"]
-
-        text = message.get("text", "")
-
-        print("CHAT ID:", chat_id, flush=True)
-        print("TEXT:", text, flush=True)
-
-        if text == "/start":
-
-            print("START DETECTED", flush=True)
-
-            send_message(
-                chat_id,
-                "👋 Привет! Я QEVRA 🚀\n\n"
-                "Бот снова работает!"
-            )
-
-            print("MESSAGE SENT", flush=True)
+        print(
+            "MESSAGE FOUND",
+            flush=True
+        )
 
         message = update["message"]
 
@@ -170,45 +210,56 @@ def webhook():
 
         user_id = message["from"]["id"]
 
-        text = message.get("text", "")
+        text = message.get(
+            "text",
+            ""
+        )
 
-        print("CHAT ID:", chat_id)
-        print("USER ID:", user_id)
-        print("TEXT:", text)
+        print(
+            "CHAT ID:",
+            chat_id,
+            flush=True
+        )
+
+        print(
+            "USER ID:",
+            user_id,
+            flush=True
+        )
+
+        print(
+            "TEXT:",
+            text,
+            flush=True
+        )
+
+
+        # =========================
+        # START
+        # =========================
 
         if text == "/start":
 
-            print("🔥 START COMMAND")
+            print(
+                "START DETECTED",
+                flush=True
+            )
 
-            start_command(chat_id)
+            start_command(
+                chat_id
+            )
 
-        elif "photo" in message:
 
-            print("📸 Получено фото")
-
-            if check_subscription(user_id):
-
-                send_message(
-                    chat_id,
-
-                    "✅ Доступ подтверждён!\n\n"
-                    "📸 Я получил твоё фото.\n\n"
-                    "Функцию распознавания текста "
-                    "подключим следующим этапом."
-                )
-
-            else:
-
-                send_message(
-                    chat_id,
-
-                    "❌ Доступ закрыт.\n\n"
-                    "Сначала подпишись на канал "
-                    "@bonusgrew и нажми "
-                    "«Проверить подписку»."
-                )
+    # =========================
+    # КНОПКИ
+    # =========================
 
     if "callback_query" in update:
+
+        print(
+            "CALLBACK FOUND",
+            flush=True
+        )
 
         callback = update["callback_query"]
 
@@ -220,11 +271,27 @@ def webhook():
 
         callback_data = callback["data"]
 
-        print("BUTTON:", callback_data)
+        print(
+            "CALLBACK DATA:",
+            callback_data,
+            flush=True
+        )
+
+
+        # =========================
+        # ПРОВЕРКА ПОДПИСКИ
+        # =========================
 
         if callback_data == "check_subscription":
 
-            subscribed = check_subscription(user_id)
+            subscribed = check_subscription(
+                user_id
+            )
+
+
+            # =========================
+            # ПОДПИСКА ЕСТЬ
+            # =========================
 
             if subscribed:
 
@@ -236,28 +303,18 @@ def webhook():
                     }
                 )
 
-                keyboard = {
-                    "inline_keyboard": [
-
-                        [
-                            {
-                                "text": "📸 Распознать фото",
-                                "callback_data": "ocr"
-                            }
-                        ]
-
-                    ]
-                }
-
                 send_message(
                     chat_id,
 
                     "🎉 Отлично!\n\n"
                     "Подписка подтверждена.\n\n"
-                    "Теперь выбери инструмент:",
-
-                    keyboard
+                    "Теперь тебе доступен QEVRA."
                 )
+
+
+            # =========================
+            # ПОДПИСКИ НЕТ
+            # =========================
 
             else:
 
@@ -272,19 +329,31 @@ def webhook():
                 send_message(
                     chat_id,
 
-                    "❌ Я не вижу подписку.\n\n"
+                    "❌ Я пока не вижу твою подписку.\n\n"
                     "Подпишись на @bonusgrew "
-                    "и нажми кнопку ещё раз."
+                    "и нажми кнопку проверки ещё раз."
                 )
+
 
     return "OK"
 
 
-@app.route("/", methods=["GET"])
+# =========================
+# ГЛАВНАЯ
+# =========================
+
+@app.route(
+    "/",
+    methods=["GET"]
+)
 def home():
 
     return "QEVRA is alive! 🚀"
 
+
+# =========================
+# ЗАПУСК
+# =========================
 
 if __name__ == "__main__":
 
@@ -295,7 +364,10 @@ if __name__ == "__main__":
         )
     )
 
-    print("🚀 QEVRA запускается...")
+    print(
+        "🚀 QEVRA запускается...",
+        flush=True
+    )
 
     app.run(
         host="0.0.0.0",
