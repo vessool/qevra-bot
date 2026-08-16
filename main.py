@@ -1,4 +1,5 @@
 import os
+import json
 import requests
 from flask import Flask, request
 
@@ -63,15 +64,23 @@ def send_message(chat_id, text, keyboard=None):
         "text": text
     }
 
-    if keyboard:
+    if keyboard is not None:
+        data["reply_markup"] = json.dumps(keyboard)
 
-        data["reply_markup"] = keyboard
-
-    return telegram(
-        "sendMessage",
-        data
+    response = requests.post(
+        f"{API}/sendMessage",
+        data=data,
+        timeout=30
     )
 
+    print(
+        "Telegram: sendMessage",
+        response.status_code,
+        response.text,
+        flush=True
+    )
+
+    return response.json()
 
 # =========================
 # ПРОВЕРКА ПОДПИСКИ
