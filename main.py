@@ -141,7 +141,7 @@ def check_subscription(user_id):
 
 
 # =========================
-# СКАЧИВАНИЕ ФОТО ИЗ TELEGRAM
+# СКАЧИВАНИЕ ФОТО
 # =========================
 
 def download_telegram_photo(file_id):
@@ -218,10 +218,8 @@ def recognize_text(image_bytes):
             flush=True
         )
 
-        # Переводим в RGB
         image = image.convert("RGB")
 
-        # Увеличиваем изображение
         width, height = image.size
 
         if width < 1600:
@@ -235,15 +233,12 @@ def recognize_text(image_bytes):
                 )
             )
 
-        # Оттенки серого
         image = image.convert("L")
 
-        # Повышаем контраст
         image = ImageEnhance.Contrast(
             image
         ).enhance(2.0)
 
-        # Немного резкости
         image = image.filter(
             ImageFilter.SHARPEN
         )
@@ -302,14 +297,11 @@ def start_command(chat_id):
         chat_id,
 
         "👋 Привет! Я QEVRA 🚀\n\n"
-
         "Здесь будут полезные инструменты "
         "прямо в Telegram.\n\n"
-
         "Для получения доступа сначала "
         "подпишись на наш канал:\n"
         "@bonusgrew\n\n"
-
         "После подписки нажми "
         "«✅ Проверить подписку».",
 
@@ -348,6 +340,40 @@ def show_menu(chat_id):
 
 
 # =========================
+# МЕНЮ ПОСЛЕ OCR
+# =========================
+
+def ocr_result_keyboard():
+
+    return {
+        "inline_keyboard": [
+
+            [
+                {
+                    "text": "🌐 Перевести",
+                    "callback_data": "translate"
+                }
+            ],
+
+            [
+                {
+                    "text": "✍️ Улучшить текст",
+                    "callback_data": "improve"
+                }
+            ],
+
+            [
+                {
+                    "text": "📸 Распознать ещё",
+                    "callback_data": "ocr"
+                }
+            ]
+
+        ]
+    }
+
+
+# =========================
 # ОБРАБОТКА ФОТО
 # =========================
 
@@ -362,12 +388,10 @@ def process_photo(
         flush=True
     )
 
-    # Проверяем подписку
     if not check_subscription(user_id):
 
         send_message(
             chat_id,
-
             "❌ Сначала подпишись на @bonusgrew."
         )
 
@@ -384,7 +408,6 @@ def process_photo(
 
         photos = message["photo"]
 
-        # Берём самое большое изображение
         largest_photo = photos[-1]
 
         file_id = largest_photo["file_id"]
@@ -397,7 +420,6 @@ def process_photo(
 
             send_message(
                 chat_id,
-
                 "❌ Не удалось скачать фотографию."
             )
 
@@ -419,7 +441,6 @@ def process_photo(
 
             return
 
-        # Telegram ограничивает размер текста сообщения
         max_length = 4000
 
         if len(text) <= max_length:
@@ -428,14 +449,22 @@ def process_photo(
                 chat_id,
 
                 "📝 Распознанный текст:\n\n"
-                + text
+                + text,
+
+                ocr_result_keyboard()
             )
 
         else:
 
-            # Разбиваем длинный текст
+            send_message(
+                chat_id,
+
+                "📝 Распознанный текст:\n\n"
+                + text[:max_length]
+            )
+
             for i in range(
-                0,
+                max_length,
                 len(text),
                 max_length
             ):
@@ -448,6 +477,12 @@ def process_photo(
                     chat_id,
                     part
                 )
+
+            send_message(
+                chat_id,
+                "Что сделать дальше?",
+                ocr_result_keyboard()
+            )
 
     except Exception as error:
 
@@ -570,7 +605,7 @@ def webhook():
 
 
     # =========================
-    # КНОПКИ
+    # CALLBACK
     # =========================
 
     if "callback_query" in update:
@@ -607,11 +642,6 @@ def webhook():
                 user_id
             )
 
-
-            # =========================
-            # ПОДПИСКА ЕСТЬ
-            # =========================
-
             if subscribed:
 
                 telegram(
@@ -625,11 +655,6 @@ def webhook():
                 show_menu(
                     chat_id
                 )
-
-
-            # =========================
-            # ПОДПИСКИ НЕТ
-            # =========================
 
             else:
 
@@ -668,6 +693,54 @@ def webhook():
 
                 "📸 Отправь мне фотографию с текстом.\n\n"
                 "Я попробую распознать текст."
+            )
+
+
+        # =========================
+        # ПЕРЕВОД
+        # =========================
+
+        elif callback_data == "translate":
+
+            telegram(
+                "answerCallbackQuery",
+                {
+                    "callback_query_id": callback_id,
+                    "text": "🌐 Функция перевода готовится"
+                }
+            )
+
+            send_message(
+                chat_id,
+
+                "🌐 Перевод\n\n"
+                "Эта функция пока находится в разработке.\n\n"
+                "Скоро QEVRA сможет переводить "
+                "распознанный текст."
+            )
+
+
+        # =========================
+        # УЛУЧШЕНИЕ ТЕКСТА
+        # =========================
+
+        elif callback_data == "improve":
+
+            telegram(
+                "answerCallbackQuery",
+                {
+                    "callback_query_id": callback_id,
+                    "text": "✍️ Функция готовится"
+                }
+            )
+
+            send_message(
+                chat_id,
+
+                "✍️ Улучшение текста\n\n"
+                "Эта функция пока находится в разработке.\n\n"
+                "Скоро QEVRA сможет исправлять "
+                "ошибки и форматировать текст."
             )
 
 
