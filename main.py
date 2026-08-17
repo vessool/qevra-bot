@@ -889,22 +889,23 @@ def is_list_item(
     )
 
 
-def is_numbered_item(
-    line
-):
+def is_numbered_item(line):
 
-    return bool(
-        re.match(
-            r"^\d+[\.\)]\s+",
-            line
+    return (
+        bool(
+            re.match(
+                r"^\d+[\.\)]\s+",
+                line
+            )
         )
-    ) or bool(
-        re.match(
-            r"^\d+\.\d+[\.\)]\s+",
-            line
+        or
+        bool(
+            re.match(
+                r"^\d+\.\d+[\.\)]\s+",
+                line
+            )
         )
-
-
+    )
 # =========================================================
 # АНАЛИЗ КОЛОНОК
 # =========================================================
