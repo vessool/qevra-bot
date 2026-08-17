@@ -3,14 +3,21 @@ import json
 import requests
 import time
 import tempfile
+import re
 
 from flask import Flask, request
 
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 import pytesseract
 
+from pytesseract import Output
+
 from io import BytesIO
+
 from docx import Document
+from docx.shared import Pt, Cm
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT, WD_CELL_VERTICAL_ALIGNMENT
 
 
 app = Flask(__name__)
@@ -239,6 +246,106 @@ def download_telegram_photo(
 
 
 # =========================================================
+# ПОДГОТОВКА ИЗОБРАЖЕНИЯ
+# =========================================================
+
+def prepare_image(image):
+
+    print(
+        "🖼️ ПОДГОТОВКА ИЗОБРАЖЕНИЯ",
+        flush=True
+    )
+
+    image = image.convert("RGB")
+
+    width, height = image.size
+
+    print(
+        "Исходный размер:",
+        width,
+        "x",
+        height,
+        flush=True
+    )
+
+    # -----------------------------------------------------
+    # Увеличиваем небольшие фотографии
+    # -----------------------------------------------------
+
+    target_width = 1800
+
+    if width < target_width:
+
+        scale = target_width / width
+
+        image = image.resize(
+            (
+                int(width * scale),
+                int(height * scale)
+            ),
+            Image.Resampling.LANCZOS
+        )
+
+    # -----------------------------------------------------
+    # Не даём изображению становиться чрезмерно большим
+    # -----------------------------------------------------
+
+    max_width = 2200
+
+    if image.width > max_width:
+
+        scale = max_width / image.width
+
+        image = image.resize(
+            (
+                max_width,
+                int(image.height * scale)
+            ),
+            Image.Resampling.LANCZOS
+        )
+
+    # -----------------------------------------------------
+    # Оттенки серого
+    # -----------------------------------------------------
+
+    image = ImageOps.grayscale(
+        image
+    )
+
+    # -----------------------------------------------------
+    # Автоконтраст
+    # -----------------------------------------------------
+
+    image = ImageOps.autocontrast(
+        image
+    )
+
+    # -----------------------------------------------------
+    # Контраст
+    # -----------------------------------------------------
+
+    image = ImageEnhance.Contrast(
+        image
+    ).enhance(1.5)
+
+    # -----------------------------------------------------
+    # Резкость
+    # -----------------------------------------------------
+
+    image = image.filter(
+        ImageFilter.SHARPEN
+    )
+
+    print(
+        "Размер после подготовки:",
+        image.size,
+        flush=True
+    )
+
+    return image
+
+
+# =========================================================
 # OCR
 # =========================================================
 
@@ -257,39 +364,8 @@ def recognize_text(
             BytesIO(image_bytes)
         )
 
-        print(
-            "Размер:",
-            image.size,
-            flush=True
-        )
-
-        image = image.convert(
-            "RGB"
-        )
-
-        width, height = image.size
-
-        if width < 1600:
-
-            scale = 1600 / width
-
-            image = image.resize(
-                (
-                    int(width * scale),
-                    int(height * scale)
-                )
-            )
-
-        image = image.convert(
-            "L"
-        )
-
-        image = ImageEnhance.Contrast(
+        image = prepare_image(
             image
-        ).enhance(2.0)
-
-        image = image.filter(
-            ImageFilter.SHARPEN
         )
 
         print(
@@ -297,13 +373,19 @@ def recognize_text(
             flush=True
         )
 
+        # -------------------------------------------------
+        # Основной OCR
+        # -------------------------------------------------
+
         text = pytesseract.image_to_string(
             image,
             lang="rus+eng",
             config="--psm 6"
         )
 
-        text = text.strip()
+        text = clean_ocr_text(
+            text
+        )
 
         print(
             "OCR FINISHED. Символов:",
@@ -325,6 +407,345 @@ def recognize_text(
 
 
 # =========================================================
+# ОЧИСТКА OCR
+# =========================================================
+
+def clean_ocr_text(text):
+
+    if not text:
+        return ""
+
+    lines = []
+
+    for raw_line in text.splitlines():
+
+        line = raw_line.strip()
+
+        if not line:
+
+            lines.append("")
+
+            continue
+
+        # Убираем повторяющиеся пробелы
+        line = re.sub(
+            r"[ \t]+",
+            " ",
+            line
+        )
+
+        # Исправляем пробелы перед знаками
+        line = re.sub(
+            r"\s+([,.!?;:%])",
+            r"\1",
+            line
+        )
+
+        # Исправляем скобки
+        line = re.sub(
+            r"\(\s+",
+            "(",
+            line
+        )
+
+        line = re.sub(
+            r"\s+\)",
+            ")",
+            line
+        )
+
+        lines.append(
+            line
+        )
+
+    # Убираем слишком большое количество
+    # пустых строк подряд
+
+    result = []
+
+    empty_count = 0
+
+    for line in lines:
+
+        if not line:
+
+            empty_count += 1
+
+            if empty_count <= 1:
+
+                result.append("")
+
+        else:
+
+            empty_count = 0
+
+            result.append(
+                line
+            )
+
+    return "\n".join(
+        result
+    ).strip()
+
+
+# =========================================================
+# ОПРЕДЕЛЕНИЕ ЗАГОЛОВКА
+# =========================================================
+
+def is_heading(line):
+
+    line = line.strip()
+
+    if not line:
+        return False
+
+    words = line.split()
+
+    # Слишком длинная строка почти наверняка
+    # является обычным текстом
+
+    if len(words) > 14:
+        return False
+
+    if len(line) > 120:
+        return False
+
+    # Если это пункт списка — не заголовок
+
+    if re.match(
+        r"^(\d+[\.\)]|\d+\.\d+[\.\)]|[-•*–])",
+        line
+    ):
+
+        return False
+
+    letters = [
+        char
+        for char in line
+        if char.isalpha()
+    ]
+
+    if not letters:
+        return False
+
+    uppercase = [
+        char
+        for char in letters
+        if char.isupper()
+    ]
+
+    ratio = (
+        len(uppercase)
+        /
+        len(letters)
+    )
+
+    # Полностью или преимущественно заглавная строка
+
+    if ratio >= 0.65:
+
+        return True
+
+    # Короткая строка без точки в конце
+
+    if (
+        len(words) <= 8
+        and len(line) <= 70
+        and not line.endswith(
+            (".", ",", ";", ":")
+        )
+    ):
+
+        # Если первая буква заглавная
+        if line[0].isupper():
+
+            return True
+
+    return False
+
+
+# =========================================================
+# ОПРЕДЕЛЕНИЕ СПИСКА
+# =========================================================
+
+def is_list_item(line):
+
+    return bool(
+        re.match(
+            r"^(\d+[\.\)]|\d+\.\d+[\.\)]|[-•*–])\s+",
+            line
+        )
+    )
+
+
+# =========================================================
+# ОПРЕДЕЛЕНИЕ НУМЕРОВАННОГО ПУНКТА
+# =========================================================
+
+def is_numbered_item(line):
+
+    return bool(
+        re.match(
+            r"^\d+[\.\)]\s+",
+            line
+        )
+    ) or bool(
+        re.match(
+            r"^\d+\.\d+[\.\)]\s+",
+            line
+        )
+    )
+
+
+# =========================================================
+# ПОПЫТКА ОПРЕДЕЛИТЬ ТАБЛИЦУ
+# =========================================================
+
+def looks_like_table(lines):
+
+    if len(lines) < 2:
+        return False
+
+    table_lines = 0
+
+    for line in lines:
+
+        # Несколько больших промежутков
+        # между словами часто означают колонки
+
+        if re.search(
+            r"\s{3,}",
+            line
+        ):
+
+            table_lines += 1
+
+            continue
+
+        # Разделители таблиц
+
+        if "|" in line:
+
+            table_lines += 1
+
+    return table_lines >= 2
+
+
+# =========================================================
+# РАЗБОР ПРОСТОЙ ТАБЛИЦЫ
+# =========================================================
+
+def parse_table(lines):
+
+    rows = []
+
+    for line in lines:
+
+        line = line.strip()
+
+        if not line:
+            continue
+
+        # Таблица через |
+
+        if "|" in line:
+
+            cells = [
+                cell.strip()
+                for cell in line.split("|")
+            ]
+
+        else:
+
+            # Таблица через несколько пробелов
+
+            cells = [
+                cell.strip()
+                for cell in re.split(
+                    r"\s{3,}",
+                    line
+                )
+                if cell.strip()
+            ]
+
+        if len(cells) >= 2:
+
+            rows.append(
+                cells
+            )
+
+    return rows
+
+
+# =========================================================
+# ДОБАВЛЕНИЕ ТАБЛИЦЫ
+# =========================================================
+
+def add_table(
+    document,
+    rows
+):
+
+    if not rows:
+        return
+
+    max_columns = max(
+        len(row)
+        for row in rows
+    )
+
+    if max_columns < 2:
+        return
+
+    table = document.add_table(
+        rows=len(rows),
+        cols=max_columns
+    )
+
+    table.style = "Table Grid"
+
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+    for row_index, row in enumerate(rows):
+
+        for column_index in range(
+            max_columns
+        ):
+
+            cell = table.cell(
+                row_index,
+                column_index
+            )
+
+            cell.vertical_alignment = (
+                WD_CELL_VERTICAL_ALIGNMENT.CENTER
+            )
+
+            if column_index < len(row):
+
+                cell.text = row[
+                    column_index
+                ]
+
+            else:
+
+                cell.text = ""
+
+            for paragraph in cell.paragraphs:
+
+                paragraph.paragraph_format.space_after = Pt(0)
+
+                for run in paragraph.runs:
+
+                    run.font.name = "Arial"
+                    run.font.size = Pt(10)
+
+                    if row_index == 0:
+
+                        run.bold = True
+
+
+# =========================================================
 # СОЗДАНИЕ WORD
 # =========================================================
 
@@ -333,30 +754,261 @@ def create_word_document(text):
     try:
 
         print(
-            "📄 СОЗДАЁМ WORD",
+            "📄 СОЗДАЁМ СТРУКТУРИРОВАННЫЙ WORD",
             flush=True
         )
 
         document = Document()
 
-        # Разбиваем распознанный текст на строки
-        lines = text.splitlines()
+        # -------------------------------------------------
+        # Настройка страницы
+        # -------------------------------------------------
 
-        for line in lines:
+        section = document.sections[0]
+
+        section.top_margin = Cm(2)
+        section.bottom_margin = Cm(2)
+        section.left_margin = Cm(2)
+        section.right_margin = Cm(2)
+
+        # -------------------------------------------------
+        # Основной стиль
+        # -------------------------------------------------
+
+        normal_style = document.styles["Normal"]
+
+        normal_style.font.name = "Arial"
+        normal_style.font.size = Pt(11)
+
+        # -------------------------------------------------
+        # Получаем строки
+        # -------------------------------------------------
+
+        raw_lines = text.splitlines()
+
+        lines = []
+
+        for line in raw_lines:
 
             line = line.strip()
 
-            if line:
+            if not line:
 
-                document.add_paragraph(
+                lines.append("")
+
+                continue
+
+            line = re.sub(
+                r"[ \t]+",
+                " ",
+                line
+            )
+
+            lines.append(
+                line
+            )
+
+        # -------------------------------------------------
+        # Проверяем, похож ли блок на таблицу
+        # -------------------------------------------------
+
+        table_candidate = looks_like_table(
+            lines
+        )
+
+        if table_candidate:
+
+            table_rows = parse_table(
+                lines
+            )
+
+            if (
+                table_rows
+                and max(
+                    len(row)
+                    for row in table_rows
+                ) >= 2
+            ):
+
+                print(
+                    "📊 Обнаружена возможная таблица",
+                    flush=True
+                )
+
+                add_table(
+                    document,
+                    table_rows
+                )
+
+                # Если таблица занимала практически
+                # весь документ — заканчиваем
+
+                non_empty = [
+                    line
+                    for line in lines
+                    if line
+                ]
+
+                if len(table_rows) >= len(
+                    non_empty
+                ) * 0.7:
+
+                    return save_word_document(
+                        document
+                    )
+
+        # -------------------------------------------------
+        # Обычный структурированный документ
+        # -------------------------------------------------
+
+        previous_was_heading = False
+
+        for line in lines:
+
+            # -------------------------------------------------
+            # Пустая строка
+            # -------------------------------------------------
+
+            if not line:
+
+                paragraph = document.add_paragraph()
+
+                paragraph.paragraph_format.space_after = Pt(2)
+
+                continue
+
+            # -------------------------------------------------
+            # Заголовок
+            # -------------------------------------------------
+
+            if is_heading(line):
+
+                paragraph = document.add_paragraph()
+
+                paragraph.alignment = (
+                    WD_ALIGN_PARAGRAPH.CENTER
+                )
+
+                paragraph.paragraph_format.space_before = Pt(8)
+                paragraph.paragraph_format.space_after = Pt(8)
+
+                run = paragraph.add_run(
                     line
                 )
 
-            else:
+                run.bold = True
+                run.font.name = "Arial"
 
-                document.add_paragraph("")
+                # Заголовок крупнее обычного текста
 
-        # Временный файл
+                if len(line) <= 50:
+
+                    run.font.size = Pt(15)
+
+                else:
+
+                    run.font.size = Pt(13)
+
+                previous_was_heading = True
+
+                continue
+
+            # -------------------------------------------------
+            # Нумерованный пункт
+            # -------------------------------------------------
+
+            if is_numbered_item(line):
+
+                paragraph = document.add_paragraph()
+
+                paragraph.paragraph_format.left_indent = Cm(0.4)
+                paragraph.paragraph_format.first_line_indent = Cm(0)
+
+                paragraph.paragraph_format.space_after = Pt(5)
+                paragraph.paragraph_format.line_spacing = 1.15
+
+                run = paragraph.add_run(
+                    line
+                )
+
+                run.font.name = "Arial"
+                run.font.size = Pt(11)
+
+                previous_was_heading = False
+
+                continue
+
+            # -------------------------------------------------
+            # Маркированный список
+            # -------------------------------------------------
+
+            if is_list_item(line):
+
+                paragraph = document.add_paragraph()
+
+                paragraph.paragraph_format.left_indent = Cm(0.7)
+                paragraph.paragraph_format.first_line_indent = Cm(0)
+
+                paragraph.paragraph_format.space_after = Pt(4)
+
+                run = paragraph.add_run(
+                    line
+                )
+
+                run.font.name = "Arial"
+                run.font.size = Pt(11)
+
+                previous_was_heading = False
+
+                continue
+
+            # -------------------------------------------------
+            # Обычный абзац
+            # -------------------------------------------------
+
+            paragraph = document.add_paragraph()
+
+            paragraph.paragraph_format.space_after = Pt(6)
+            paragraph.paragraph_format.line_spacing = 1.15
+
+            # Отступ первой строки
+
+            paragraph.paragraph_format.first_line_indent = Cm(0.7)
+
+            run = paragraph.add_run(
+                line
+            )
+
+            run.font.name = "Arial"
+            run.font.size = Pt(11)
+
+            previous_was_heading = False
+
+        return save_word_document(
+            document
+        )
+
+    except Exception as error:
+
+        print(
+            "WORD ERROR:",
+            error,
+            flush=True
+        )
+
+        return None
+
+
+# =========================================================
+# СОХРАНЕНИЕ WORD
+# =========================================================
+
+def save_word_document(
+    document
+):
+
+    try:
+
         temp_file = tempfile.NamedTemporaryFile(
             delete=False,
             suffix=".docx"
@@ -381,7 +1033,7 @@ def create_word_document(text):
     except Exception as error:
 
         print(
-            "WORD ERROR:",
+            "SAVE WORD ERROR:",
             error,
             flush=True
         )
@@ -520,7 +1172,7 @@ def start_command(
 
         "👋 Привет! Я QEVRA 🚀\n\n"
 
-        "Я могу помочь обработать фотографию документа.\n\n"
+        "Я могу обработать фотографию документа.\n\n"
 
         "📸 Распознать текст\n"
         "📄 Создать редактируемый Word\n"
@@ -692,7 +1344,7 @@ def process_photo(
 
 
 # =========================================================
-# WORD
+# СОЗДАНИЕ WORD
 # =========================================================
 
 def process_create_word(
@@ -717,7 +1369,8 @@ def process_create_word(
     send_message(
         chat_id,
 
-        "📄 Создаю редактируемый Word-файл..."
+        "📄 Анализирую структуру документа...\n\n"
+        "Это может занять немного времени."
     )
 
     file_path = create_word_document(
@@ -748,8 +1401,8 @@ def process_create_word(
                 chat_id,
 
                 "✅ Готово!\n\n"
-                "📄 Word-файл можно открыть "
-                "и редактировать."
+                "📄 Создан редактируемый Word-файл.\n"
+                "Можно открыть его и изменить текст."
             )
 
         else:
