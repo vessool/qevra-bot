@@ -948,120 +948,123 @@ def get_line_gaps(
 # ОПРЕДЕЛЕНИЕ ТАБЛИЦЫ ПО КООРДИНАТАМ
 # =========================================================
 
-def detect_table_blocks(
-    lines
-):
+def detect_table_blocks(lines):
 
-    if len(lines) < 2:
+    if not lines or len(lines) < 3:
         return []
 
-    candidates = []
+    blocks = []
+
+    # Ищем последовательности строк,
+    # в которых визуально присутствуют 2+ колонки.
+    candidate_indexes = []
 
     for index, line in enumerate(lines):
 
         if len(line) < 2:
             continue
 
-        gaps = get_line_gaps(
-            line
-        )
-
-        if not gaps:
-            continue
+        gaps = get_line_gaps(line)
 
         large_gaps = [
             gap
             for gap in gaps
-            if gap["gap"] >= 35
+            if gap["gap"] >= 70
         ]
 
-        if large_gaps:
+        if len(large_gaps) >= 1:
+            candidate_indexes.append(index)
 
-            candidates.append(
-                index
-            )
-
-    if len(candidates) < 2:
-
+    if not candidate_indexes:
         return []
 
-    blocks = []
+    current = [candidate_indexes[0]]
 
-    current = [
-        candidates[0]
-    ]
+    for index in candidate_indexes[1:]:
 
-    for index in candidates[1:]:
+        if index - current[-1] <= 1:
 
-        previous = current[-1]
-
-        if index - previous <= 2:
-
-            current.append(
-                index
-            )
+            current.append(index)
 
         else:
 
             if len(current) >= 2:
+                blocks.append(current)
 
-                blocks.append(
-                    current
-                )
-
-            current = [
-                index
-            ]
+            current = [index]
 
     if len(current) >= 2:
-
-        blocks.append(
-            current
-        )
+        blocks.append(current)
 
     return blocks
-
 
 # =========================================================
 # ПОЛУЧЕНИЕ КОЛОНОК ТАБЛИЦЫ
 # =========================================================
 
-def build_table_from_lines(
-    lines
-):
+def build_table_from_lines(lines):
 
-    if len(lines) < 2:
+    if not lines or len(lines) < 2:
         return None
 
     # -----------------------------------------------------
-    # Собираем все позиции потенциальных колонок
+    # Определяем реальные вертикальные позиции слов
     # -----------------------------------------------------
 
-    positions = []
+    all_words = []
 
     for line in lines:
 
-        gaps = get_line_gaps(
-            line
-        )
+        for word in line:
 
-        for gap in gaps:
+            all_words.append(word)
 
-            if gap["gap"] >= 35:
-
-                positions.append(
-                    gap["position"]
-                )
-
-    if len(positions) < 2:
-
+    if len(all_words) < 4:
         return None
 
     # -----------------------------------------------------
-    # Группируем близкие позиции
+    # Ищем большие горизонтальные разрывы.
+    # Они обычно разделяют колонки.
     # -----------------------------------------------------
 
-    positions.sort()
+    gaps = []
+
+    for line in lines:
+
+        sorted_line = sorted(
+            line,
+            key=lambda item: item["left"]
+        )
+
+        for i in range(1, len(sorted_line)):
+
+            previous = sorted_line[i - 1]
+            current = sorted_line[i]
+
+            gap = (
+                current["left"]
+                -
+                previous["right"]
+            )
+
+            if gap >= 70:
+
+                gaps.append({
+                    "x": current["left"],
+                    "gap": gap
+                })
+
+    if not gaps:
+        return None
+
+    # -----------------------------------------------------
+    # Группируем похожие позиции начала колонок
+    # -----------------------------------------------------
+
+    positions = sorted(
+        gap["x"]
+        for gap in gaps
+    )
 
     clusters = []
 
@@ -1069,132 +1072,115 @@ def build_table_from_lines(
 
         if not clusters:
 
-            clusters.append(
-                [position]
-            )
+            clusters.append([position])
 
             continue
 
-        if abs(
-            position - statistics.mean(
-                clusters[-1]
-            )
-        ) <= 60:
+        average = statistics.mean(
+            clusters[-1]
+        )
 
-            clusters[-1].append(
-                position
-            )
+        if abs(position - average) <= 100:
+
+            clusters[-1].append(position)
 
         else:
 
-            clusters.append(
-                [position]
+            clusters.append([position])
+
+    column_starts = []
+
+    for cluster in clusters:
+
+        if len(cluster) >= 1:
+
+            column_starts.append(
+                int(
+                    statistics.median(cluster)
+                )
             )
 
-    column_positions = [
-        int(
-            statistics.mean(
-                cluster
-            )
-        )
-        for cluster in clusters
-        if cluster
-    ]
+    # -----------------------------------------------------
+    # Для нормальной таблицы достаточно 2 колонок
+    # -----------------------------------------------------
 
-    # Нужны хотя бы две колонки
-
-    if len(column_positions) < 2:
-
+    if len(column_starts) < 2:
         return None
 
-    # -----------------------------------------------------
-    # Ограничиваем количество колонок
-    # -----------------------------------------------------
+    # Не допускаем слишком много ложных колонок
 
-    if len(column_positions) > 8:
-
-        column_positions = column_positions[:8]
+    column_starts = column_starts[:4]
 
     rows = []
+
+    # -----------------------------------------------------
+    # Раскладываем слова по колонкам
+    # -----------------------------------------------------
 
     for line in lines:
 
         cells = [
-            ""
-            for _ in column_positions
+            []
+            for _ in column_starts
         ]
 
-        for word in line:
+        for word in sorted(
+            line,
+            key=lambda item: item["left"]
+        ):
 
             x = word["left"]
 
-            # Ищем ближайшую колонку слева
+            # Последняя колонка, начало которой
+            # находится левее слова.
+            column_index = 0
 
-            distances = [
-                abs(
-                    x - position
-                )
-                for position in column_positions
-            ]
+            for i, start in enumerate(
+                column_starts
+            ):
 
-            nearest = min(
-                range(
-                    len(distances)
-                ),
-                key=lambda i: distances[i]
+                if x >= start:
+                    column_index = i
+
+            cells[column_index].append(
+                word["text"]
             )
 
-            # Если слово находится слишком далеко
-            # от предполагаемой структуры,
-            # относим его к первой подходящей колонке.
+        row = [
+            " ".join(cell).strip()
+            for cell in cells
+        ]
 
-            if nearest >= len(cells):
+        # Убираем полностью пустые строки
 
-                continue
+        if any(row):
 
-            if cells[nearest]:
-
-                cells[nearest] += " "
-
-            cells[nearest] += word["text"]
-
-        # -------------------------------------------------
-        # Удаляем пустые хвостовые колонки
-        # -------------------------------------------------
-
-        while cells and not cells[-1]:
-
-            cells.pop()
-
-        if cells:
-
-            rows.append(
-                cells
-            )
+            rows.append(row)
 
     if len(rows) < 2:
-
         return None
 
     # -----------------------------------------------------
-    # Таблица должна действительно иметь
-    # несколько заполненных колонок
+    # Проверяем, действительно ли это таблица
     # -----------------------------------------------------
 
-    filled_rows = 0
+    multi_column_rows = 0
 
     for row in rows:
 
-        if sum(
+        filled = sum(
             1
             for cell in row
             if cell.strip()
-        ) >= 2:
+        )
 
-            filled_rows += 1
+        if filled >= 2:
+            multi_column_rows += 1
 
-    if filled_rows < 2:
+    # Если меньше двух строк имеют несколько колонок,
+    # скорее всего это обычный текст.
 
+    if multi_column_rows < 2:
         return None
 
     return rows
