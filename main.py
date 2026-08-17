@@ -1342,231 +1342,203 @@ def create_word_document(
     try:
 
         print(
-            "📄 СОЗДАЁМ WORD",
+            "📄 СОЗДАЁМ WORD — ВИЗУАЛЬНЫЙ РЕЖИМ",
             flush=True
         )
 
         document = Document()
 
-        # -------------------------------------------------
-        # Страница
-        # -------------------------------------------------
+        # =================================================
+        # СТРАНИЦА
+        # =================================================
 
         section = document.sections[0]
 
-        section.top_margin = Cm(2)
-        section.bottom_margin = Cm(2)
-        section.left_margin = Cm(2)
-        section.right_margin = Cm(2)
+        section.top_margin = Cm(1.5)
+        section.bottom_margin = Cm(1.5)
+        section.left_margin = Cm(1.5)
+        section.right_margin = Cm(1.5)
 
-        # -------------------------------------------------
-        # Основной стиль
-        # -------------------------------------------------
+        # =================================================
+        # ОСНОВНОЙ ШРИФТ
+        # =================================================
 
-        normal_style = document.styles[
-            "Normal"
-        ]
+        normal_style = document.styles["Normal"]
 
         normal_style.font.name = "Arial"
         normal_style.font.size = Pt(11)
 
-        # -------------------------------------------------
-        # Если есть OCR-координаты —
-        # пытаемся восстановить таблицы.
-        # -------------------------------------------------
+        # =================================================
+        # ЕСЛИ НЕТ OCR-КООРДИНАТ
+        # =================================================
 
-        used_table_lines = set()
+        if not ocr_data:
 
-        if ocr_data:
+            for raw_line in text.splitlines():
 
-            visual_lines = ocr_data.get(
-                "lines",
-                []
-            )
+                paragraph = document.add_paragraph()
 
-            table_blocks = detect_table_blocks(
-                visual_lines
-            )
+                paragraph.paragraph_format.space_after = Pt(4)
+                paragraph.paragraph_format.line_spacing = 1.15
+                paragraph.paragraph_format.first_line_indent = Cm(0)
 
-            print(
-                "📊 Возможных таблиц:",
-                len(table_blocks),
-                flush=True
-            )
-
-            for block in table_blocks:
-
-                block_lines = [
-                    visual_lines[i]
-                    for i in block
-                    if i < len(visual_lines)
-                ]
-
-                table_rows = build_table_from_lines(
-                    block_lines
+                run = paragraph.add_run(
+                    raw_line
                 )
 
-                if table_rows:
+                run.font.name = "Arial"
+                run.font.size = Pt(11)
 
-                    print(
-                        "📊 Таблица восстановлена:",
-                        len(table_rows),
-                        "строк",
-                        flush=True
-                    )
+            return save_word_document(
+                document
+            )
 
-                    add_table(
-                        document,
-                        table_rows
-                    )
+        # =================================================
+        # OCR ДАННЫЕ
+        # =================================================
 
-                    document.add_paragraph()
+        lines = ocr_data.get(
+            "lines",
+            []
+        )
 
-                    for index in block:
+        words = ocr_data.get(
+            "words",
+            []
+        )
 
-                        used_table_lines.add(
-                            index
-                        )
+        if not lines:
 
-        # -------------------------------------------------
-        # Если OCR-координат нет —
-        # работаем обычным текстом.
-        # -------------------------------------------------
+            return save_word_document(
+                document
+            )
 
-        if ocr_data:
+        # =================================================
+        # РАЗМЕР ИСХОДНОГО ИЗОБРАЖЕНИЯ
+        # =================================================
 
-            lines = [
-                line_to_text(line)
-                for line in ocr_data.get(
-                    "lines",
-                    []
-                )
-            ]
+        page_width = max(
+            word["right"]
+            for word in words
+        )
 
-        else:
+        page_height = max(
+            word["bottom"]
+            for word in words
+        )
 
-            lines = text.splitlines()
+        print(
+            "📐 OCR PAGE:",
+            page_width,
+            "x",
+            page_height,
+            flush=True
+        )
 
-        # -------------------------------------------------
-        # Создаём обычный документ
-        # -------------------------------------------------
+        # =================================================
+        # РАСЧЁТ МАСШТАБА
+        # =================================================
+
+        # Word A4 рабочая ширина примерно 18 см.
+        #
+        # Все координаты фотографии переводим
+        # в координаты Word.
+
+        usable_width_cm = 18.0
+
+        scale_x = (
+            usable_width_cm
+            /
+            max(page_width, 1)
+        )
+
+        # =================================================
+        # ВЕРТИКАЛЬНАЯ ШКАЛА
+        # =================================================
+
+        previous_bottom = 0
+
+        # =================================================
+        # ОБРАБОТКА КАЖДОЙ OCR-СТРОКИ
+        # =================================================
 
         for index, line in enumerate(
             lines
         ):
 
-            line = line.strip()
-
-            # Пропускаем строки,
-            # которые уже попали в таблицу.
-
-            if index in used_table_lines:
-
-                continue
-
-            # Пустая строка
-
             if not line:
+                continue
 
-                paragraph = document.add_paragraph()
+            text_line = line_to_text(
+                line
+            )
 
-                paragraph.paragraph_format.space_after = Pt(2)
-
+            if not text_line:
                 continue
 
             # -------------------------------------------------
-            # Заголовок
+            # ГРАНИЦЫ СТРОКИ
             # -------------------------------------------------
 
-            if is_heading(line):
+            left = min(
+                word["left"]
+                for word in line
+            )
 
-                paragraph = document.add_paragraph()
+            top = min(
+                word["top"]
+                for word in line
+            )
 
-                # ВАЖНО:
-                # только настоящий заголовок центрируем.
+            right = max(
+                word["right"]
+                for word in line
+            )
 
-                paragraph.alignment = (
-                    WD_ALIGN_PARAGRAPH.CENTER
-                )
-
-                paragraph.paragraph_format.space_before = Pt(8)
-                paragraph.paragraph_format.space_after = Pt(8)
-
-                run = paragraph.add_run(
-                    line
-                )
-
-                run.bold = True
-                run.font.name = "Arial"
-
-                if len(line) <= 50:
-
-                    run.font.size = Pt(14)
-
-                else:
-
-                    run.font.size = Pt(12)
-
-                continue
+            bottom = max(
+                word["bottom"]
+                for word in line
+            )
 
             # -------------------------------------------------
-            # Нумерованный список
+            # ВЫСОТА БУКВ
             # -------------------------------------------------
 
-            if is_numbered_item(line):
+            heights = [
+                word["height"]
+                for word in line
+                if word["height"] > 0
+            ]
 
-                paragraph = document.add_paragraph()
+            if heights:
 
-                paragraph.alignment = (
-                    WD_ALIGN_PARAGRAPH.LEFT
+                median_height = statistics.median(
+                    heights
                 )
 
-                paragraph.paragraph_format.left_indent = Cm(0.4)
+            else:
 
-                paragraph.paragraph_format.first_line_indent = Cm(0)
-
-                paragraph.paragraph_format.space_after = Pt(5)
-
-                paragraph.paragraph_format.line_spacing = 1.15
-
-                run = paragraph.add_run(
-                    line
-                )
-
-                run.font.name = "Arial"
-                run.font.size = Pt(11)
-
-                continue
+                median_height = 20
 
             # -------------------------------------------------
-            # Маркированный список
+            # РАЗМЕР ШРИФТА
             # -------------------------------------------------
 
-            if is_list_item(line):
+            font_size = (
+                median_height
+                * 0.72
+            )
 
-                paragraph = document.add_paragraph()
-
-                paragraph.alignment = (
-                    WD_ALIGN_PARAGRAPH.LEFT
+            font_size = max(
+                7,
+                min(
+                    18,
+                    font_size
                 )
-
-                paragraph.paragraph_format.left_indent = Cm(0.7)
-
-                paragraph.paragraph_format.first_line_indent = Cm(0)
-
-                paragraph.paragraph_format.space_after = Pt(4)
-
-                run = paragraph.add_run(
-                    line
-                )
-
-                run.font.name = "Arial"
-                run.font.size = Pt(11)
-
-                continue
+            )
 
             # -------------------------------------------------
-            # Обычный текст
+            # СОЗДАЁМ ПАРАГРАФ
             # -------------------------------------------------
 
             paragraph = document.add_paragraph()
@@ -1575,24 +1547,150 @@ def create_word_document(
                 WD_ALIGN_PARAGRAPH.LEFT
             )
 
-            paragraph.paragraph_format.space_after = Pt(5)
+            paragraph.paragraph_format.line_spacing = 1.0
 
-            paragraph.paragraph_format.line_spacing = 1.15
-
-            # ВАЖНО:
-            # убираем искусственный отступ первой строки.
-            #
-            # Для OCR-документа он часто портит
-            # исходное расположение.
+            paragraph.paragraph_format.space_after = Pt(0)
 
             paragraph.paragraph_format.first_line_indent = Cm(0)
 
+            # -------------------------------------------------
+            # ГОРИЗОНТАЛЬНАЯ ПОЗИЦИЯ
+            # -------------------------------------------------
+
+            left_indent = (
+                left
+                * scale_x
+            )
+
+            # Не даём отступу выйти
+            # за пределы страницы.
+
+            left_indent = max(
+                0,
+                min(
+                    16,
+                    left_indent
+                )
+            )
+
+            paragraph.paragraph_format.left_indent = Cm(
+                left_indent
+            )
+
+            # -------------------------------------------------
+            # ВЕРТИКАЛЬНЫЙ ПРОБЕЛ
+            # -------------------------------------------------
+
+            if previous_bottom > 0:
+
+                vertical_gap = (
+                    top
+                    -
+                    previous_bottom
+                )
+
+                # Преобразуем пиксели
+                # в приблизительные points.
+
+                space_before = (
+                    vertical_gap
+                    * 0.35
+                )
+
+                space_before = max(
+                    0,
+                    min(
+                        30,
+                        space_before
+                    )
+                )
+
+                paragraph.paragraph_format.space_before = Pt(
+                    space_before
+                )
+
+            # -------------------------------------------------
+            # ОПРЕДЕЛЯЕМ ЗАГОЛОВОК
+            # -------------------------------------------------
+
+            heading = is_heading(
+                text_line
+            )
+
+            if heading:
+
+                paragraph.alignment = (
+                    WD_ALIGN_PARAGRAPH.CENTER
+                )
+
+                paragraph.paragraph_format.left_indent = Cm(0)
+
+                font_size = max(
+                    13,
+                    font_size
+                )
+
+                font_size = min(
+                    20,
+                    font_size
+                )
+
+            # -------------------------------------------------
+            # СПИСОК
+            # -------------------------------------------------
+
+            elif is_numbered_item(
+                text_line
+            ):
+
+                paragraph.paragraph_format.left_indent = Cm(
+                    min(
+                        16,
+                        left_indent + 0.3
+                    )
+                )
+
+            elif is_list_item(
+                text_line
+            ):
+
+                paragraph.paragraph_format.left_indent = Cm(
+                    min(
+                        16,
+                        left_indent + 0.5
+                    )
+                )
+
+            # -------------------------------------------------
+            # ТЕКСТ
+            # -------------------------------------------------
+
             run = paragraph.add_run(
-                line
+                text_line
             )
 
             run.font.name = "Arial"
-            run.font.size = Pt(11)
+
+            run.font.size = Pt(
+                font_size
+            )
+
+            run.bold = heading
+
+            # -------------------------------------------------
+            # ЗАПОМИНАЕМ НИЗ СТРОКИ
+            # -------------------------------------------------
+
+            previous_bottom = bottom
+
+        # =================================================
+        # СОХРАНЕНИЕ
+        # =================================================
+
+        print(
+            "✅ ВИЗУАЛЬНЫЙ WORD ГОТОВ",
+            flush=True
+        )
 
         return save_word_document(
             document
@@ -1601,7 +1699,7 @@ def create_word_document(
     except Exception as error:
 
         print(
-            "WORD ERROR:",
+            "❌ WORD VISUAL ERROR:",
             error,
             flush=True
         )
