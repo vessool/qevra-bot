@@ -3398,6 +3398,61 @@ def webhook():
                     )
 
         # -------------------------------------------------
+        # IDENTIFY DOCUMENT
+        # -------------------------------------------------
+
+        elif callback_data == "identify_document":
+
+            telegram(
+                "answerCallbackQuery",
+                {
+                    "callback_query_id": callback_id,
+                    "text": "🧠 Анализирую документ..."
+                }
+            )
+
+            if user_id not in user_texts:
+
+                send_message(
+                    chat_id,
+
+                    "❌ Нет распознанного документа.\n\n"
+                    "Сначала отправь фотографию документа."
+                )
+
+            else:
+
+                text = user_texts[
+                    user_id
+                ]
+
+                send_message(
+                    chat_id,
+
+                    "🧠 Анализирую документ...\n\n"
+                    "🔎 Определяю тип\n"
+                    "📂 Определяю категорию\n"
+                    "📑 Анализирую признаки"
+                )
+
+                information = format_document_information(
+                    text
+                )
+
+                send_message(
+                    chat_id,
+                    information
+                )
+
+                send_message(
+                    chat_id,
+
+                    "Что будем делать дальше?",
+
+                    ocr_keyboard()
+                )
+        
+        # -------------------------------------------------
         # IMPROVE
         # -------------------------------------------------
 
