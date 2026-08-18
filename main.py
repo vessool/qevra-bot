@@ -1763,6 +1763,13 @@ def main_menu_keyboard():
                     "text": "📸 Распознать документ",
                     "callback_data": "ocr"
                 }
+            ],
+
+            [
+                {
+                    "text": "📎 Работа с файлом",
+                    "callback_data": "file_tools"
+                }
             ]
 
         ]
