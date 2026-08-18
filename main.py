@@ -1790,6 +1790,13 @@ def ocr_keyboard():
 
             [
                 {
+                    "text": "🔎 Найти в файле",
+                    "callback_data": "find_in_file"
+                }
+            ],
+
+            [
+                {
                     "text": "🌐 Перевести",
                     "callback_data": "translate"
                 },
