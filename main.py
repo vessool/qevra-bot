@@ -2234,6 +2234,623 @@ def search_in_file(
 
     return unique_matches
 
+# =========================================================
+# QEVRA DOCUMENT INTELLIGENCE
+# УНИВЕРСАЛЬНОЕ ОПРЕДЕЛЕНИЕ ДОКУМЕНТА
+# =========================================================
+
+DOCUMENT_DATABASE = {
+
+    "Финансовые документы": {
+
+        "Invoice / Счёт": [
+            "invoice",
+            "invoice number",
+            "amount due",
+            "subtotal",
+            "total",
+            "tax",
+            "счёт",
+            "сумма",
+            "итого"
+        ],
+
+        "Receipt / Чек": [
+            "receipt",
+            "cashier",
+            "change",
+            "payment",
+            "чек",
+            "кассир",
+            "оплата"
+        ],
+
+        "Bank Statement / Банковская выписка": [
+            "bank statement",
+            "account statement",
+            "transaction",
+            "balance",
+            "debit",
+            "credit",
+            "банковская выписка",
+            "операция",
+            "баланс"
+        ],
+
+        "Payment Order / Платёжное поручение": [
+            "payment order",
+            "payment instruction",
+            "beneficiary",
+            "payer",
+            "платёжное поручение",
+            "получатель",
+            "плательщик"
+        ]
+    },
+
+
+    "Юридические документы": {
+
+        "Contract / Договор": [
+            "contract",
+            "agreement",
+            "party",
+            "parties",
+            "terms and conditions",
+            "договор",
+            "соглашение",
+            "стороны",
+            "условия"
+        ],
+
+        "Power of Attorney / Доверенность": [
+            "power of attorney",
+            "authorized representative",
+            "attorney",
+            "доверенность",
+            "представитель",
+            "уполномоченный"
+        ],
+
+        "Application / Заявление": [
+            "application",
+            "applicant",
+            "request",
+            "заявление",
+            "заявитель",
+            "прошу"
+        ]
+    },
+
+
+    "Государственные документы": {
+
+        "Passport / Паспорт": [
+            "passport",
+            "surname",
+            "given name",
+            "date of birth",
+            "nationality",
+            "паспорт",
+            "фамилия",
+            "имя",
+            "дата рождения",
+            "гражданство"
+        ],
+
+        "Birth Certificate / Свидетельство о рождении": [
+            "birth certificate",
+            "date of birth",
+            "place of birth",
+            "свидетельство о рождении",
+            "место рождения"
+        ],
+
+        "Tax Document / Налоговый документ": [
+            "tax",
+            "taxpayer",
+            "tax authority",
+            "налог",
+            "налогоплательщик",
+            "налоговый"
+        ]
+    },
+
+
+    "Образовательные документы": {
+
+        "Diploma / Диплом": [
+            "diploma",
+            "degree",
+            "graduation",
+            "university",
+            "диплом",
+            "образование",
+            "университет"
+        ],
+
+        "Certificate of Education / Аттестат": [
+            "certificate of education",
+            "secondary education",
+            "school",
+            "аттестат",
+            "среднее образование",
+            "школа"
+        ],
+
+        "Transcript / Выписка с оценками": [
+            "transcript",
+            "grade",
+            "course",
+            "credits",
+            "оценка",
+            "дисциплина",
+            "кредиты"
+        ]
+    },
+
+
+    "Трудовые документы": {
+
+        "Employment Contract / Трудовой договор": [
+            "employment contract",
+            "employee",
+            "employer",
+            "salary",
+            "position",
+            "трудовой договор",
+            "работник",
+            "работодатель",
+            "зарплата",
+            "должность"
+        ],
+
+        "Job Application / Заявление о приёме": [
+            "job application",
+            "position",
+            "applicant",
+            "vacancy",
+            "заявление о приёме",
+            "должность",
+            "вакансия"
+        ]
+    },
+
+
+    "Медицинские документы": {
+
+        "Medical Report / Медицинское заключение": [
+            "medical report",
+            "diagnosis",
+            "patient",
+            "doctor",
+            "medical",
+            "медицинское заключение",
+            "диагноз",
+            "пациент",
+            "врач"
+        ],
+
+        "Prescription / Рецепт": [
+            "prescription",
+            "medicine",
+            "dosage",
+            "doctor",
+            "рецепт",
+            "лекарство",
+            "дозировка",
+            "врач"
+        ],
+
+        "Laboratory Report / Лабораторный анализ": [
+            "laboratory",
+            "laboratory result",
+            "test result",
+            "reference range",
+            "результат анализа",
+            "лаборатория",
+            "референсный диапазон"
+        ]
+    },
+
+
+    "Страховые документы": {
+
+        "Insurance Policy / Страховой полис": [
+            "insurance policy",
+            "policy number",
+            "insured",
+            "insurance company",
+            "страховой полис",
+            "номер полиса",
+            "застрахованный",
+            "страховая компания"
+        ],
+
+        "Insurance Claim / Страховой случай": [
+            "insurance claim",
+            "claim number",
+            "incident",
+            "страховой случай",
+            "номер заявления",
+            "происшествие"
+        ]
+    },
+
+
+    "Транспортные документы": {
+
+        "Driving Licence / Водительское удостоверение": [
+            "driving licence",
+            "driver license",
+            "driving license",
+            "date of birth",
+            "expiry",
+            "водительское удостоверение",
+            "права",
+            "срок действия"
+        ],
+
+        "Vehicle Registration / Регистрация автомобиля": [
+            "vehicle registration",
+            "registration number",
+            "vehicle",
+            "автомобиль",
+            "регистрационный номер",
+            "регистрация"
+        ]
+    },
+
+
+    "Логистические документы": {
+
+        "Bill of Lading / Коносамент": [
+            "bill of lading",
+            "shipper",
+            "consignee",
+            "port of loading",
+            "port of discharge",
+            "cargo",
+            "коносамент",
+            "грузоотправитель",
+            "грузополучатель",
+            "груз"
+        ],
+
+        "Packing List / Упаковочный лист": [
+            "packing list",
+            "package",
+            "quantity",
+            "weight",
+            "упаковочный лист",
+            "количество",
+            "вес"
+        ],
+
+        "Delivery Note / Накладная": [
+            "delivery note",
+            "delivery",
+            "goods",
+            "quantity",
+            "накладная",
+            "доставка",
+            "товар",
+            "количество"
+        ]
+    },
+
+
+    "Морские документы": {
+
+        "Muster List / Расписание по тревогам": [
+            "muster list",
+            "alarm signals",
+            "general alarm",
+            "abandon ship",
+            "fire and emergency",
+            "man overboard",
+            "flooding",
+            "сигналы тревог",
+            "оставление судна",
+            "человек за бортом",
+            "затопление"
+        ],
+
+        "Ship Certificate / Судовой сертификат": [
+            "ship certificate",
+            "certificate of registry",
+            "flag state",
+            "vessel",
+            "судовой сертификат",
+            "судно",
+            "флаг"
+        ]
+    },
+
+
+    "Бизнес документы": {
+
+        "Business Report / Бизнес-отчёт": [
+            "business report",
+            "financial report",
+            "revenue",
+            "profit",
+            "business",
+            "отчёт",
+            "выручка",
+            "прибыль",
+            "бизнес"
+        ],
+
+        "Purchase Order / Заказ на покупку": [
+            "purchase order",
+            "po number",
+            "supplier",
+            "buyer",
+            "заказ на покупку",
+            "поставщик",
+            "покупатель"
+        ]
+    },
+
+
+    "Технические документы": {
+
+        "Technical Manual / Техническое руководство": [
+            "manual",
+            "installation",
+            "operation",
+            "maintenance",
+            "technical",
+            "руководство",
+            "установка",
+            "эксплуатация",
+            "обслуживание",
+            "технический"
+        ],
+
+        "Specification / Спецификация": [
+            "specification",
+            "technical specification",
+            "model",
+            "serial number",
+            "спецификация",
+            "технические характеристики",
+            "модель",
+            "серийный номер"
+        ]
+    },
+
+
+    "Коммерческие документы": {
+
+        "Quotation / Коммерческое предложение": [
+            "quotation",
+            "quote",
+            "offer",
+            "price",
+            "commercial offer",
+            "коммерческое предложение",
+            "цена",
+            "предложение"
+        ],
+
+        "Order / Заказ": [
+            "order",
+            "order number",
+            "customer",
+            "quantity",
+            "заказ",
+            "номер заказа",
+            "клиент",
+            "количество"
+        ]
+    }
+}
+
+
+# =========================================================
+# ПОИСК ПРИЗНАКОВ ДОКУМЕНТА
+# =========================================================
+
+def identify_document(text):
+
+    if not text:
+
+        return {
+            "category": "Неизвестно",
+            "type": "Документ не определён",
+            "description":
+                "В документе не удалось обнаружить текст.",
+            "confidence": 0,
+            "matched_keywords": []
+        }
+
+    text_lower = text.lower()
+
+    best_category = None
+    best_type = None
+    best_score = 0
+    best_keywords = []
+
+    # -----------------------------------------------------
+    # Проверяем всю базу
+    # -----------------------------------------------------
+
+    for category, documents in DOCUMENT_DATABASE.items():
+
+        for document_type, keywords in documents.items():
+
+            matched = []
+
+            for keyword in keywords:
+
+                if keyword.lower() in text_lower:
+
+                    matched.append(keyword)
+
+            score = len(matched)
+
+            if score > best_score:
+
+                best_score = score
+                best_category = category
+                best_type = document_type
+                best_keywords = matched
+
+    # -----------------------------------------------------
+    # Не нашли достаточно признаков
+    # -----------------------------------------------------
+
+    if best_score == 0:
+
+        return {
+            "category": "Неизвестно",
+            "type": "Не удалось точно определить",
+            "description":
+                "QEVRA не обнаружила достаточного количества "
+                "характерных признаков документа.",
+            "confidence": 0,
+            "matched_keywords": []
+        }
+
+    # -----------------------------------------------------
+    # Расчёт уверенности
+    # -----------------------------------------------------
+
+    if best_score >= 5:
+
+        confidence = 95
+
+    elif best_score == 4:
+
+        confidence = 88
+
+    elif best_score == 3:
+
+        confidence = 75
+
+    elif best_score == 2:
+
+        confidence = 55
+
+    else:
+
+        confidence = 30
+
+    # -----------------------------------------------------
+    # Описание
+    # -----------------------------------------------------
+
+    descriptions = {
+
+        "Финансовые документы":
+            "Документ связан с оплатой, финансами, расчётами или денежными операциями.",
+
+        "Юридические документы":
+            "Документ имеет юридическое назначение и может определять права, обязанности или официальные обращения.",
+
+        "Государственные документы":
+            "Официальный документ, связанный с государственными органами или удостоверением личности и статуса.",
+
+        "Образовательные документы":
+            "Документ связан с образованием, обучением, квалификацией или результатами обучения.",
+
+        "Трудовые документы":
+            "Документ связан с трудовыми отношениями, работником, работодателем или трудоустройством.",
+
+        "Медицинские документы":
+            "Документ содержит медицинскую информацию, результаты обследований или сведения о лечении.",
+
+        "Страховые документы":
+            "Документ связан со страхованием, полисом или страховым случаем.",
+
+        "Транспортные документы":
+            "Документ связан с транспортом, водителем или регистрацией транспортного средства.",
+
+        "Логистические документы":
+            "Документ связан с перевозкой, грузом, доставкой или упаковкой.",
+
+        "Морские документы":
+            "Документ связан с эксплуатацией судна, экипажем, безопасностью или морскими перевозками.",
+
+        "Бизнес документы":
+            "Документ используется в деятельности компании или организации.",
+
+        "Технические документы":
+            "Документ содержит технические сведения, инструкции, характеристики или требования.",
+
+        "Коммерческие документы":
+            "Документ связан с продажей, покупкой, заказом или коммерческим предложением."
+    }
+
+    return {
+        "category": best_category,
+        "type": best_type,
+        "description":
+            descriptions.get(
+                best_category,
+                "QEVRA определила назначение документа."
+            ),
+        "confidence": confidence,
+        "matched_keywords": best_keywords
+    }
+
+
+# =========================================================
+# ФОРМИРОВАНИЕ ИНФОРМАЦИИ О ДОКУМЕНТЕ
+# =========================================================
+
+def format_document_information(text):
+
+    result = identify_document(
+        text
+    )
+
+    if result["confidence"] == 0:
+
+        return (
+            "🧠 АНАЛИЗ ДОКУМЕНТА\n\n"
+
+            "❓ Точный тип определить не удалось.\n\n"
+
+            "QEVRA пока не нашла достаточно признаков "
+            "для уверенной классификации этого документа.\n\n"
+
+            "💡 Попробуйте использовать фотографию "
+            "с более чётким текстом."
+        )
+
+    message = (
+        "🧠 АНАЛИЗ ДОКУМЕНТА\n\n"
+
+        f"📂 Категория:\n"
+        f"{result['category']}\n\n"
+
+        f"📄 Тип:\n"
+        f"{result['type']}\n\n"
+
+        f"📌 Назначение:\n"
+        f"{result['description']}\n\n"
+
+        f"🎯 Уверенность:\n"
+        f"{result['confidence']}%"
+    )
+
+    if result["matched_keywords"]:
+
+        message += (
+            "\n\n🔎 Найденные признаки:\n"
+        )
+
+        for keyword in result["matched_keywords"][:8]:
+
+            message += (
+                f"• {keyword}\n"
+            )
+
+    return message
+
 
 # =========================================================
 # УЛУЧШЕНИЕ ТЕКСТА
