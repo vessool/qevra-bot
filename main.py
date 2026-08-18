@@ -2157,6 +2157,83 @@ def process_create_word(
         except Exception:
             pass
 
+# =========================================================
+# ПОИСК В ФАЙЛЕ — ЭКСПЕРИМЕНТАЛЬНАЯ ФУНКЦИЯ
+# =========================================================
+
+def search_in_file(
+    text,
+    query
+):
+
+    if not text or not query:
+        return None
+
+    query = query.strip()
+
+    if not query:
+        return None
+
+    # -----------------------------------------------------
+    # Поиск без учёта регистра
+    # -----------------------------------------------------
+
+    lines = text.splitlines()
+
+    query_lower = query.lower()
+
+    matches = []
+
+    for index, line in enumerate(lines):
+
+        if query_lower in line.lower():
+
+            # Берём несколько соседних строк,
+            # чтобы показать контекст.
+
+            start = max(
+                0,
+                index - 1
+            )
+
+            end = min(
+                len(lines),
+                index + 2
+            )
+
+            context = "\n".join(
+                lines[start:end]
+            ).strip()
+
+            matches.append(
+                context
+            )
+
+    if not matches:
+        return None
+
+    # -----------------------------------------------------
+    # Убираем одинаковые результаты
+    # -----------------------------------------------------
+
+    unique_matches = []
+
+    for match in matches:
+
+        if match not in unique_matches:
+
+            unique_matches.append(
+                match
+            )
+
+    # -----------------------------------------------------
+    # Ограничиваем количество результатов
+    # -----------------------------------------------------
+
+    unique_matches = unique_matches[:10]
+
+    return unique_matches
+
 
 # =========================================================
 # УЛУЧШЕНИЕ ТЕКСТА
