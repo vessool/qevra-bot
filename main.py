@@ -2463,7 +2463,86 @@ def webhook():
             )
 
             return "OK"
+            
+        # -------------------------------------------------
+        # ПОИСК В ФАЙЛЕ
+        # -------------------------------------------------
 
+        if text and hasattr(
+            webhook,
+            "search_mode"
+        ) and user_id in webhook.search_mode:
+
+            webhook.search_mode.discard(
+                user_id
+            )
+
+            document_text = user_texts.get(
+                user_id
+            )
+
+            if not document_text:
+
+                send_message(
+                    chat_id,
+
+                    "❌ Файл не найден."
+                )
+
+                return "OK"
+
+            send_message(
+                chat_id,
+
+                "🔎 Ищу в документе..."
+            )
+
+            results = search_in_file(
+                document_text,
+                text
+            )
+
+            if not results:
+
+                send_message(
+                    chat_id,
+
+                    "🔎 Ничего не найдено.\n\n"
+                    "Попробуй другое слово или "
+                    "более короткую фразу."
+                )
+
+            else:
+
+                response = (
+                    "🔎 Найдено в документе:\n\n"
+                )
+
+                for number, result in enumerate(
+                    results,
+                    1
+                ):
+
+                    response += (
+                        f"📌 Результат {number}:\n"
+                        f"{result}\n\n"
+                    )
+
+                send_long_message(
+                    chat_id,
+                    response
+                )
+
+                send_message(
+                    chat_id,
+
+                    "Что дальше?",
+
+                    ocr_keyboard()
+                )
+
+            return "OK"
+            
     # =====================================================
     # CALLBACK
     # =====================================================
@@ -2520,7 +2599,100 @@ def webhook():
 
                 "📸 Отправь фотографию документа."
             )
+                 # -------------------------------------------------
+        # FILE TOOLS
+        # -------------------------------------------------
 
+        elif callback_data == "file_tools":
+
+            telegram(
+                "answerCallbackQuery",
+                {
+                    "callback_query_id": callback_id
+                }
+            )
+
+            if user_id not in user_texts:
+
+                send_message(
+                    chat_id,
+
+                    "📎 Работа с файлом\n\n"
+                    "Сначала отправь фотографию документа, "
+                    "чтобы QEVRA смогла его распознать."
+                )
+
+            else:
+
+                send_message(
+                    chat_id,
+
+                    "📎 Работа с файлом\n\n"
+                    "Что хочешь сделать?\n\n"
+                    "🔎 Найти информацию в документе\n\n"
+                    "Экспериментальная функция."
+                )
+
+                send_message(
+                    chat_id,
+
+                    "Нажми «🔎 Найти в файле» "
+                    "или просто выбери нужное действие.",
+                    ocr_keyboard()
+                )
+
+        # -------------------------------------------------
+        # FIND IN FILE
+        # -------------------------------------------------
+
+        elif callback_data == "find_in_file":
+
+            telegram(
+                "answerCallbackQuery",
+                {
+                    "callback_query_id": callback_id
+                }
+            )
+
+            if user_id not in user_texts:
+
+                send_message(
+                    chat_id,
+
+                    "❌ У меня пока нет обработанного файла.\n\n"
+                    "Сначала отправь фотографию документа."
+                )
+
+            else:
+
+                send_message(
+                    chat_id,
+
+                    "🔎 Поиск в файле включён.\n\n"
+                    "Напиши, что нужно найти.\n\n"
+                    "Например:\n"
+                    "• номер судна\n"
+                    "• капитан\n"
+                    "• дату\n"
+                    "• телефон\n"
+                    "• сумму\n"
+                    "• слово или фразу\n\n"
+                    "Экспериментальная функция."
+                )
+
+                # Флаг ожидания поискового запроса
+
+                if not hasattr(
+                    webhook,
+                    "search_mode"
+                ):
+
+                    webhook.search_mode = set()
+
+                webhook.search_mode.add(
+                    user_id
+                )
+                
         # -------------------------------------------------
         # CREATE WORD
         # -------------------------------------------------
